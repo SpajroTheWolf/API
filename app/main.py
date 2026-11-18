@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
 import secrets
 import hashlib
 import string
 import random
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import Base, engine, get_db
 from app.models import User, LicenseKey
@@ -22,9 +24,19 @@ from app.auth import (
 )
 from app.config import ADMIN_TOKEN
 
-Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+    except SQLAlchemyError as exc:
+        raise RuntimeError(
+            f"Could not connect to the PostgreSQL database at startup: {exc}"
+        ) from exc
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # ------------------------
